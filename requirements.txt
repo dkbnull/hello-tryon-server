@@ -1,0 +1,9 @@
+fastapi>=0.115
+uvicorn[standard]>=0.30
+sqlalchemy>=2.0
+pydantic>=2.7
+python-multipart>=0.0.9
+pillow>=10.3
+pyjwt>=2.8
+# 抠图依赖（AI 去背景，首次运行会自动下载 u2net 模型约 170MB）
+rembg[cpu]>=2.0

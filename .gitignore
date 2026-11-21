@@ -33,6 +33,18 @@ htmlcov/
 # --- 环境变量与敏感信息 ---
 .env
 
+# --- AI 模型文件（176MB，不进版本库，见 app/config.py MODELS_DIR）---
+models/
+
+# --- 日志 ---
+*.log
+
+# --- 数据库文件 ---
+*.db
+
+# --- 上传的衣物图片（用户数据不进版本库）---
+uploads/
+
 # --- 操作系统文件 (推荐) ---
 .DS_Store
 Thumbs.db
