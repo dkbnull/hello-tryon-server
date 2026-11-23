@@ -36,6 +36,10 @@ def process_image(raw: bytes) -> tuple[bytes, float]:
     except (UnidentifiedImageError, OSError) as e:
         raise ValueError("无法解析图片文件") from e
 
+    # 抠图前先压到目标长边：u2net 推理与后处理均按输入分辨率分配内存，
+    # 全尺寸原图峰值可达数百 MB，缩小后内存峰值即降至最终产物量级
+    img.thumbnail((IMAGE_MAX_EDGE, IMAGE_MAX_EDGE), Image.LANCZOS)
+
     if REMBG_AVAILABLE:
         try:
             result = remove(img.convert("RGBA"), session=_rembg_session)
