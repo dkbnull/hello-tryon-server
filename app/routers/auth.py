@@ -9,8 +9,20 @@ from ..config import INVITE_CODE
 from ..database import get_db
 from ..deps import get_current_user
 from ..models import User
-from ..schemas import LoginIn, PasswordChangeIn, RegisterIn, TokenOut, UserMeIn, UserOut
-from ..security import check_password_strength, create_token, hash_password, verify_password
+from ..schemas import (
+    LoginIn, PasswordChangeIn, RefreshIn, RegisterIn,
+    TokenOut, TokenRefreshOut, UserMeIn, UserOut,
+)
+from ..security import (
+    check_password_strength, create_token, decode_token, hash_password, verify_password,
+)
+
+
+def _issue_tokens(user_id: int) -> TokenRefreshOut:
+    return TokenRefreshOut(
+        token=create_token(user_id),
+        refresh_token=create_token(user_id, "refresh"),
+    )
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 
@@ -38,7 +50,7 @@ def register(data: RegisterIn, db: Session = Depends(get_db)):
     db.add(user)
     db.commit()
     db.refresh(user)
-    return TokenOut(token=create_token(user.id), user=UserOut.model_validate(user))
+    return TokenOut(**_issue_tokens(user.id).model_dump(), user=UserOut.model_validate(user))
 
 
 @router.post("/login", response_model=TokenOut)
@@ -47,7 +59,21 @@ def login(data: LoginIn, db: Session = Depends(get_db)):
     user = db.query(User).filter(User.account == account).first()
     if not user or not verify_password(data.password, user.password_hash):
         raise HTTPException(401, "账号或密码错误")
-    return TokenOut(token=create_token(user.id), user=UserOut.model_validate(user))
+    return TokenOut(**_issue_tokens(user.id).model_dump(), user=UserOut.model_validate(user))
+
+
+@router.post("/refresh", response_model=TokenRefreshOut)
+def refresh(data: RefreshIn, db: Session = Depends(get_db)):
+    """刷新令牌轮换：校验 refresh_token，签发新的 access + refresh"""
+    user_id = decode_token(data.refresh_token, typ="refresh")
+    if user_id is None:
+        raise HTTPException(401, "登录态已失效，请重新登录")
+    if db.get(User, user_id) is None:
+        raise HTTPException(401, "账号不存在")
+    return TokenRefreshOut(
+        token=create_token(user_id),
+        refresh_token=create_token(user_id, "refresh"),
+    )
 
 
 @router.get("/me", response_model=UserOut)

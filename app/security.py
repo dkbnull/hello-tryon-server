@@ -5,7 +5,7 @@ from datetime import datetime, timedelta, timezone
 
 import jwt
 
-from .config import JWT_EXPIRE_HOURS, JWT_SECRET
+from .config import JWT_EXPIRE_HOURS, JWT_REFRESH_DAYS, JWT_SECRET
 
 _ITERATIONS = 120_000
 
@@ -29,18 +29,28 @@ def verify_password(password: str, stored: str) -> bool:
         return False
 
 
-def create_token(user_id: int) -> str:
+def create_token(user_id: int, typ: str = "access") -> str:
+    """签发 JWT：typ=access（访问令牌）或 refresh（刷新令牌）"""
+    ttl = (
+        timedelta(days=JWT_REFRESH_DAYS)
+        if typ == "refresh"
+        else timedelta(hours=JWT_EXPIRE_HOURS)
+    )
     payload = {
         "sub": str(user_id),
-        "exp": datetime.now(timezone.utc) + timedelta(hours=JWT_EXPIRE_HOURS),
+        "typ": typ,
+        "exp": datetime.now(timezone.utc) + ttl,
     }
     return jwt.encode(payload, JWT_SECRET, algorithm="HS256")
 
 
-def decode_token(token: str) -> int | None:
-    """返回 user_id，失败返回 None"""
+def decode_token(token: str, typ: str = "access") -> int | None:
+    """校验指定类型的 JWT，返回 user_id，失败返回 None"""
     try:
         payload = jwt.decode(token, JWT_SECRET, algorithms=["HS256"])
+        # 兼容旧版无 typ 声明的令牌（视为 access）
+        if payload.get("typ", "access") != typ:
+            return None
         return int(payload["sub"])
     except (jwt.PyJWTError, KeyError, ValueError):
         return None

@@ -1,12 +1,18 @@
-"""应用配置：从环境变量读取，提供开发默认值"""
+"""应用配置：优先读取环境变量，本地开发自动加载项目根目录 .env"""
 import os
+
+from dotenv import load_dotenv
+
+# 不覆盖已注入的环境变量（Docker/服务器环境优先），仅本地开发生效
+load_dotenv(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), ".env"))
 
 # 数据库：默认 SQLite，公网部署时通过 DATABASE_URL 切换 PostgreSQL
 DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./hello_tryon.db")
 
 # JWT：默认开发密钥（重启登录态不失效）；生产必须通过环境变量注入强随机值
 JWT_SECRET = os.getenv("JWT_SECRET", "dev-only-secret-change-me-in-production")
-JWT_EXPIRE_HOURS = int(os.getenv("JWT_EXPIRE_HOURS", "72"))
+JWT_EXPIRE_HOURS = int(os.getenv("JWT_EXPIRE_HOURS", "2"))  # 访问令牌有效期
+JWT_REFRESH_DAYS = int(os.getenv("JWT_REFRESH_DAYS", "30"))  # 刷新令牌有效期
 
 # 注册邀请码（生产通过环境变量替换）
 INVITE_CODE = os.getenv("INVITE_CODE", "TRYON2026")

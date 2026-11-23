@@ -37,8 +37,18 @@ class UserOut(BaseModel):
 
 
 class TokenOut(BaseModel):
-    token: str
+    token: str  # 访问令牌
+    refresh_token: str  # 刷新令牌
     user: UserOut
+
+
+class RefreshIn(BaseModel):
+    refresh_token: str = Field(min_length=1)
+
+
+class TokenRefreshOut(BaseModel):
+    token: str  # 新访问令牌
+    refresh_token: str  # 新刷新令牌（轮换）
 
 
 class ItemPatchIn(BaseModel):
