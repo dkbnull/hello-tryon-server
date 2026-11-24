@@ -7,13 +7,18 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
 from .config import CORS_ORIGINS, ITEM_DIR, UPLOAD_DIR
-from .database import init_db
+from .database import SessionLocal, init_db
 from .routers import auth, items
 
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     init_db()
+    db = SessionLocal()
+    try:
+        auth.purge_overdue_deletions(db)  # 启动时清理冷静期已结束的注销账号
+    finally:
+        db.close()
     yield
 
 

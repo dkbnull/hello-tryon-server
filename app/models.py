@@ -8,29 +8,36 @@ from .database import Base
 
 
 def utcnow():
+    """当前 UTC 时间，作为各表 created_at / deletion_at 的统一时区基准"""
     return datetime.now(timezone.utc)
 
 
 class User(Base):
+    """用户表：注册账号与个人偏好"""
     __tablename__ = "users"
 
-    id: Mapped[int] = mapped_column(primary_key=True)
-    nickname: Mapped[str] = mapped_column(String(20))
-    account: Mapped[str] = mapped_column(String(64), unique=True, index=True)
-    password_hash: Mapped[str] = mapped_column(String(128))
-    avatar_gender: Mapped[str] = mapped_column(String(8), default="female")  # female/male
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    id: Mapped[int] = mapped_column(primary_key=True)  # 主键，自增用户 ID
+    nickname: Mapped[str] = mapped_column(String(20))  # 昵称，不超过 20 字符
+    account: Mapped[str] = mapped_column(String(64), unique=True, index=True)  # 登录账号（手机号或邮箱），全局唯一
+    password_hash: Mapped[str] = mapped_column(String(128))  # 密码哈希（PBKDF2 单向加密，不存明文）
+    avatar_gender: Mapped[str] = mapped_column(String(8), default="female")  # 虚拟人物性别：female=甜甜 / male=空空
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)  # 注册时间（UTC）
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)  # 信息更新时间（UTC），昵称/性别/密码/注销状态变更时手动刷新
+    last_login_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)  # 上次登录时间（UTC），登录成功或刷新令牌时更新
+    deletion_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)  # 注销冷静期截止时间；NULL=未申请注销，期间登录自动取消注销
 
 
 class ClothingItem(Base):
+    """衣物表：用户衣橱内的单品"""
     __tablename__ = "clothing_items"
 
-    id: Mapped[int] = mapped_column(primary_key=True)
-    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
-    name: Mapped[str] = mapped_column(String(20))
-    category: Mapped[str] = mapped_column(String(16), index=True)
-    image: Mapped[str] = mapped_column(String(128))  # 相对 ITEM_DIR 的文件名
-    source: Mapped[str] = mapped_column(String(8), default="AI")  # AI=AI抠图 / manual=手动
-    conf_cut: Mapped[float] = mapped_column(Float, default=0.0)  # 抠图置信度
-    conf_cls: Mapped[float] = mapped_column(Float, default=0.0)  # 分类置信度
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    id: Mapped[int] = mapped_column(primary_key=True)  # 主键，自增衣物 ID
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)  # 所属用户 ID，外键关联 users.id
+    name: Mapped[str] = mapped_column(String(20))  # 衣物名称，留空时自动命名为「分类名-序号」
+    category: Mapped[str] = mapped_column(String(16), index=True)  # 分类：top/bottom/hat/headwear/scarf/jewel
+    image: Mapped[str] = mapped_column(String(128))  # 图片文件名，相对 ITEM_DIR，静态访问路径为 /static/items/{image}
+    source: Mapped[str] = mapped_column(String(8), default="AI")  # 图片来源：AI=AI 抠图 / manual=手动上传
+    conf_cut: Mapped[float] = mapped_column(Float, default=0.0)  # AI 抠图置信度（0~1，低于 0.6 视为手动）
+    conf_cls: Mapped[float] = mapped_column(Float, default=0.0)  # AI 分类置信度（0~1，0.5=用户在结果页手动确认）
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)  # 入库时间（UTC），衣橱列表按此倒序排列
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)  # 信息更新时间（UTC），衣物名称/分类变更时手动刷新

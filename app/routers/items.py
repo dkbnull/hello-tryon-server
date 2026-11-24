@@ -2,6 +2,8 @@
 import base64
 import os
 
+from datetime import datetime, timezone
+
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from sqlalchemy.orm import Session
 
@@ -13,6 +15,11 @@ from ..schemas import ItemOut, ItemPatchIn
 from ..services import imaging
 
 router = APIRouter(prefix="/api/items", tags=["items"])
+
+
+def _utcnow():
+    """当前 UTC 时间，衣物 updated_at 的统一时区基准"""
+    return datetime.now(timezone.utc)
 
 
 def _item_out(item: ClothingItem) -> ItemOut:
@@ -130,6 +137,7 @@ def update_item(item_id: int, data: ItemPatchIn,
         if data.category not in CATEGORIES:
             raise HTTPException(400, "无效的分类")
         item.category = data.category
+    item.updated_at = _utcnow()  # 衣物信息更新同步刷新更新时间
     db.commit()
     db.refresh(item)
     return _item_out(item)

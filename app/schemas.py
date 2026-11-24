@@ -34,12 +34,18 @@ class UserOut(BaseModel):
     account: str
     avatar_gender: str
     created_at: datetime
+    deletion_at: datetime | None = None  # 注销冷静期截止时间，None=未申请
 
 
 class TokenOut(BaseModel):
     token: str  # 访问令牌
     refresh_token: str  # 刷新令牌
     user: UserOut
+    deletion_cancelled: bool = False  # 冷静期内登录自动取消注销时为 True
+
+
+class DeletionOut(BaseModel):
+    deletion_at: datetime  # 注销完成时间（冷静期截止）
 
 
 class RefreshIn(BaseModel):

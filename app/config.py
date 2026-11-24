@@ -14,6 +14,9 @@ JWT_SECRET = os.getenv("JWT_SECRET", "dev-only-secret-change-me-in-production")
 JWT_EXPIRE_HOURS = int(os.getenv("JWT_EXPIRE_HOURS", "2"))  # 访问令牌有效期
 JWT_REFRESH_DAYS = int(os.getenv("JWT_REFRESH_DAYS", "30"))  # 刷新令牌有效期
 
+# 账号注销冷静期（天），期间登录自动取消注销
+ACCOUNT_DELETION_DAYS = int(os.getenv("ACCOUNT_DELETION_DAYS", "7"))
+
 # 注册邀请码（生产通过环境变量替换）
 INVITE_CODE = os.getenv("INVITE_CODE", "TRYON2026")
 
