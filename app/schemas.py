@@ -73,3 +73,21 @@ class ItemOut(BaseModel):
     conf_cut: float
     conf_cls: float
     created_at: datetime
+
+
+class OutfitIn(BaseModel):
+    worn_date: str = Field(pattern=r"^\d{4}-\d{2}-\d{2}$")  # 搭配日期，用户本地日期
+    gender: str  # female / male
+    items: dict  # {top,bottom,hat,headwear,scarf: id|null, jewel: [id]}
+    adjustments: dict = Field(default_factory=dict)  # 衣物 id → {dx, dy, scale}
+
+
+class OutfitOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    worn_date: str
+    gender: str
+    items: dict
+    adjustments: dict
+    created_at: datetime

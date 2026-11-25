@@ -68,7 +68,7 @@ python -m venv .venv
 |------|--------|------|
 | `DATABASE_URL` | `sqlite:///./hello_tryon.db` | 公网部署时切换 PostgreSQL |
 | `JWT_SECRET` | 开发密钥 | **生产必须**注入强随机值 |
-| `JWT_EXPIRE_HOURS` | `72` | 登录态有效期（小时） |
+| `JWT_EXPIRE_HOURS` | `2` | 登录态有效期（小时） |
 | `INVITE_CODE` | `TRYON2026` | 注册邀请码，不开放注册 |
 | `UPLOAD_DIR` | `uploads` | 图片存储目录，衣物图片位于 `uploads/items/` |
 
@@ -116,11 +116,4 @@ app/
 models/              # u2net.onnx 模型文件
 uploads/items/       # 衣物图片
 run.py               # 开发启动脚本
-```
-
-## 演示账号
-
-```
-账号：demo@tryon.cn
-密码：Demo@12345
 ```

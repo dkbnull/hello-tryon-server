@@ -4,12 +4,13 @@ import os
 
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, File, Form, UploadFile
 from sqlalchemy.orm import Session
 
 from ..config import ALLOWED_CONTENT_TYPES, CATEGORY_NAMES, CATEGORIES, ITEM_DIR, MAX_UPLOAD_BYTES
 from ..database import get_db
 from ..deps import get_current_user
+from ..errors import ApiError
 from ..models import ClothingItem, User
 from ..schemas import ItemOut, ItemPatchIn
 from ..services import imaging
@@ -42,10 +43,10 @@ def _read_upload(file: UploadFile, allowed: set[str] = ALLOWED_CONTENT_TYPES,
                  msg: str = "仅支持 JPG / PNG 格式图片") -> bytes:
     """上传约束：格式白名单、≤10MB"""
     if file.content_type not in allowed:
-        raise HTTPException(400, msg)
+        raise ApiError(400, "IMAGE_FORMAT_INVALID", msg)
     raw = file.file.read(MAX_UPLOAD_BYTES + 1)
     if len(raw) > MAX_UPLOAD_BYTES:
-        raise HTTPException(400, "图片大小不能超过 10MB")
+        raise ApiError(400, "IMAGE_TOO_LARGE", "图片大小不能超过 10MB")
     return raw
 
 
@@ -59,7 +60,7 @@ def process_photo(
     try:
         processed, cut_conf = imaging.process_image(raw)
     except ValueError as e:
-        raise HTTPException(400, str(e))
+        raise ApiError(400, "IMAGE_PROCESS_FAILED", str(e))
     category, _ = imaging.auto_classify(raw)
     return {
         "image": base64.b64encode(processed).decode(),
@@ -81,12 +82,12 @@ def upload_item(
     """第二步：确认入库（应用旋转、命名、分类后落库）"""
     raw = _read_upload(image, {"image/png"}, "入库图片必须为 PNG（AI 处理结果）")
     if category not in CATEGORIES:
-        raise HTTPException(400, "无效的分类")
+        raise ApiError(400, "CATEGORY_INVALID", "无效的分类")
 
     try:
         processed = imaging.rotate_processed(raw, rotation)
     except ValueError as e:
-        raise HTTPException(400, str(e))
+        raise ApiError(400, "IMAGE_PROCESS_FAILED", str(e))
 
     os.makedirs(ITEM_DIR, exist_ok=True)
     filename = imaging.new_image_filename()
@@ -119,7 +120,7 @@ def list_items(category: str = "", user: User = Depends(get_current_user),
     q = db.query(ClothingItem).filter(ClothingItem.user_id == user.id)
     if category:
         if category not in CATEGORIES:
-            raise HTTPException(400, "无效的分类")
+            raise ApiError(400, "CATEGORY_INVALID", "无效的分类")
         q = q.filter(ClothingItem.category == category)
     items = q.order_by(ClothingItem.created_at.desc()).all()
     return [_item_out(i) for i in items]
@@ -130,12 +131,12 @@ def update_item(item_id: int, data: ItemPatchIn,
                 user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     item = db.get(ClothingItem, item_id)
     if not item or item.user_id != user.id:
-        raise HTTPException(404, "衣物不存在")
+        raise ApiError(404, "ITEM_NOT_FOUND", "衣物不存在")
     if data.name is not None:
         item.name = data.name.strip() or item.name
     if data.category is not None:
         if data.category not in CATEGORIES:
-            raise HTTPException(400, "无效的分类")
+            raise ApiError(400, "CATEGORY_INVALID", "无效的分类")
         item.category = data.category
     item.updated_at = _utcnow()  # 衣物信息更新同步刷新更新时间
     db.commit()
@@ -148,7 +149,7 @@ def delete_item(item_id: int, user: User = Depends(get_current_user),
                 db: Session = Depends(get_db)):
     item = db.get(ClothingItem, item_id)
     if not item or item.user_id != user.id:
-        raise HTTPException(404, "衣物不存在")
+        raise ApiError(404, "ITEM_NOT_FOUND", "衣物不存在")
     db.delete(item)
     db.commit()
     try:

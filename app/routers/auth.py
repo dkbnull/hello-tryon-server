@@ -3,13 +3,14 @@ import os
 import re
 from datetime import datetime, timedelta, timezone
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
 from ..config import ACCOUNT_DELETION_DAYS, INVITE_CODE, ITEM_DIR
 
 from ..database import get_db
 from ..deps import get_current_user
+from ..errors import ApiError
 from ..models import ClothingItem, User, utcnow
 from ..schemas import (
     DeletionOut, LoginIn, PasswordChangeIn, RefreshIn, RegisterIn,
@@ -68,14 +69,14 @@ _PHONE_RE = re.compile(r"^1\d{10}$")
 @router.post("/register", response_model=TokenOut)
 def register(data: RegisterIn, db: Session = Depends(get_db)):
     if data.invite_code.strip() != INVITE_CODE:
-        raise HTTPException(403, "邀请码无效，无法注册")
+        raise ApiError(403, "INVITE_CODE_INVALID", "邀请码无效，无法注册")
     account = data.account.strip().lower()
     if not (_EMAIL_RE.match(account) or _PHONE_RE.match(account)):
-        raise HTTPException(400, "请输入正确的邮箱或手机号")
+        raise ApiError(400, "ACCOUNT_FORMAT_INVALID", "请输入正确的邮箱或手机号")
     if not check_password_strength(data.password):
-        raise HTTPException(400, "密码至少 8 位，且大写字母、小写字母、数字、特殊字符中至少包含 3 类")
+        raise ApiError(400, "PASSWORD_WEAK", "密码至少 8 位，且大写字母、小写字母、数字、特殊字符中至少包含 3 类")
     if db.query(User).filter(User.account == account).first():
-        raise HTTPException(400, "该账号已注册，请直接登录")
+        raise ApiError(400, "ACCOUNT_EXISTS", "该账号已注册，请直接登录")
 
     user = User(
         nickname=data.nickname.strip(),
@@ -93,13 +94,13 @@ def login(data: LoginIn, db: Session = Depends(get_db)):
     account = data.account.strip().lower()
     user = db.query(User).filter(User.account == account).first()
     if not user or not verify_password(data.password, user.password_hash):
-        raise HTTPException(401, "账号或密码错误")
+        raise ApiError(401, "AUTH_CREDENTIALS_INVALID", "账号或密码错误")
     # 注销状态处理：冷静期已结束则彻底删除账号，仍在冷静期内则取消注销
     deletion_cancelled = False
     if user.deletion_at is not None:
         if _deletion_due(user) <= utcnow():
             _purge_user(db, user)
-            raise HTTPException(401, "该账号已注销")
+            raise ApiError(401, "ACCOUNT_DELETED", "该账号已注销")
         user.deletion_at = None
         user.updated_at = utcnow()
         deletion_cancelled = True
@@ -118,10 +119,10 @@ def refresh(data: RefreshIn, db: Session = Depends(get_db)):
     """刷新令牌轮换：校验 refresh_token，签发新的 access + refresh"""
     user_id = decode_token(data.refresh_token, typ="refresh")
     if user_id is None:
-        raise HTTPException(401, "登录态已失效，请重新登录")
+        raise ApiError(401, "TOKEN_INVALID", "登录态已失效，请重新登录")
     user = db.get(User, user_id)
     if user is None:
-        raise HTTPException(401, "账号不存在")
+        raise ApiError(401, "ACCOUNT_NOT_FOUND", "账号不存在")
     user.last_login_at = utcnow()  # 刷新令牌视为一次活跃登录
     db.commit()
     return TokenRefreshOut(
@@ -142,7 +143,7 @@ def update_me(data: UserMeIn, user: User = Depends(get_current_user),
         user.nickname = data.nickname.strip()
     if data.avatar_gender is not None:
         if data.avatar_gender not in ("female", "male"):
-            raise HTTPException(400, "人物性别仅支持 female / male")
+            raise ApiError(400, "GENDER_INVALID", "人物性别仅支持 female / male")
         user.avatar_gender = data.avatar_gender
     user.updated_at = utcnow()  # 信息更新同步刷新更新时间
     db.commit()
@@ -154,11 +155,11 @@ def update_me(data: UserMeIn, user: User = Depends(get_current_user),
 def change_password(data: PasswordChangeIn, user: User = Depends(get_current_user),
                     db: Session = Depends(get_db)):
     if not verify_password(data.old_password, user.password_hash):
-        raise HTTPException(400, "当前密码不正确")
+        raise ApiError(400, "OLD_PASSWORD_INVALID", "当前密码不正确")
     if not check_password_strength(data.new_password):
-        raise HTTPException(400, "新密码至少 8 位，且大写字母、小写字母、数字、特殊字符中至少包含 3 类")
+        raise ApiError(400, "PASSWORD_WEAK", "新密码至少 8 位，且大写字母、小写字母、数字、特殊字符中至少包含 3 类")
     if data.old_password == data.new_password:
-        raise HTTPException(400, "新密码不能与当前密码相同")
+        raise ApiError(400, "PASSWORD_UNCHANGED", "新密码不能与当前密码相同")
     user.password_hash = hash_password(data.new_password)
     user.updated_at = utcnow()  # 密码变更同步刷新更新时间
     db.commit()

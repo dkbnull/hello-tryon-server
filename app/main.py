@@ -2,13 +2,16 @@
 import os
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from .config import CORS_ORIGINS, ITEM_DIR, UPLOAD_DIR
 from .database import SessionLocal, init_db
-from .routers import auth, items
+from .errors import error_body
+from .routers import auth, items, outfits
 
 
 @asynccontextmanager
@@ -24,6 +27,23 @@ async def lifespan(_: FastAPI):
 
 app = FastAPI(title="HelloTryon API", version="0.1.0", lifespan=lifespan)
 
+
+@app.exception_handler(HTTPException)
+async def http_error_handler(_, exc: HTTPException):
+    """统一错误体：{code, message}"""
+    return JSONResponse(status_code=exc.status_code, content=error_body(exc.status_code, exc.detail))
+
+
+@app.exception_handler(RequestValidationError)
+async def validation_error_handler(_, exc: RequestValidationError):
+    """Pydantic 参数校验失败：取第一条错误信息返回给前端展示"""
+    first = exc.errors()[0]["msg"] if exc.errors() else "参数校验失败"
+    return JSONResponse(
+        status_code=422,
+        content={"code": "VALIDATION_ERROR", "message": f"参数错误：{first}"},
+    )
+
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=CORS_ORIGINS,
@@ -34,6 +54,7 @@ app.add_middleware(
 
 app.include_router(auth.router)
 app.include_router(items.router)
+app.include_router(outfits.router)
 
 # 图片静态托管（磁盘目录起步，预留云 OSS）
 os.makedirs(ITEM_DIR, exist_ok=True)

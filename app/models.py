@@ -1,7 +1,7 @@
-"""数据模型：用户、衣物"""
+"""数据模型：用户、衣物、搭配记录"""
 from datetime import datetime, timezone
 
-from sqlalchemy import DateTime, Float, ForeignKey, String
+from sqlalchemy import JSON, DateTime, Float, ForeignKey, String
 from sqlalchemy.orm import Mapped, mapped_column
 
 from .database import Base
@@ -41,3 +41,16 @@ class ClothingItem(Base):
     conf_cls: Mapped[float] = mapped_column(Float, default=0.0)  # AI 分类置信度（0~1，0.5=用户在结果页手动确认）
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)  # 入库时间（UTC），衣橱列表按此倒序排列
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)  # 信息更新时间（UTC），衣物名称/分类变更时手动刷新
+
+
+class OutfitRecord(Base):
+    """搭配记录表：一次保存 = 一条记录，同一天可存多条"""
+    __tablename__ = "outfit_records"
+
+    id: Mapped[int] = mapped_column(primary_key=True)  # 主键，自增记录 ID
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)  # 所属用户 ID，外键关联 users.id
+    worn_date: Mapped[str] = mapped_column(String(10), index=True)  # 搭配日期（YYYY-MM-DD），前端按用户本地日期提交，作为日历索引
+    gender: Mapped[str] = mapped_column(String(8))  # 保存时的人物性别：female=甜甜 / male=空空，回放渲染必需
+    items: Mapped[dict] = mapped_column(JSON)  # 六部位穿着快照：top/bottom/hat/headwear/scarf 为衣物 id 或 null，jewel 为 id 列表
+    adjustments: Mapped[dict] = mapped_column(JSON)  # 各衣物的手动调整快照：衣物 id → {dx, dy, scale}
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)  # 保存时间（UTC），当日列表按此倒序

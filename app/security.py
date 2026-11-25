@@ -48,8 +48,7 @@ def decode_token(token: str, typ: str = "access") -> int | None:
     """校验指定类型的 JWT，返回 user_id，失败返回 None"""
     try:
         payload = jwt.decode(token, JWT_SECRET, algorithms=["HS256"])
-        # 兼容旧版无 typ 声明的令牌（视为 access）
-        if payload.get("typ", "access") != typ:
+        if payload.get("typ") != typ:
             return None
         return int(payload["sub"])
     except (jwt.PyJWTError, KeyError, ValueError):
