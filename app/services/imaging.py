@@ -13,10 +13,14 @@ from ..config import IMAGE_MAX_EDGE, MODELS_DIR
 os.environ.setdefault("U2NET_HOME", MODELS_DIR)
 
 try:
+    import onnxruntime as ort
     from rembg import remove, new_session
 
-    # 指定 u2net 模型（176MB，衣物/通用抠图效果好且比新版默认的 bria-rmbg 1GB 小）
-    _rembg_session = new_session("u2net")
+    # 关闭 onnxruntime CPU arena：默认策略按 2 的幂成倍扩展内存池且不归还，
+    # 连续上传内存持续增长直至 OOM；关闭后推理内存稳定在常量级
+    _sess_opts = ort.SessionOptions()
+    _sess_opts.enable_cpu_mem_arena = False
+    _rembg_session = new_session("u2net", sess_opts=_sess_opts)
     REMBG_AVAILABLE = True
 except Exception:  # ImportError 或模型加载失败
     REMBG_AVAILABLE = False
